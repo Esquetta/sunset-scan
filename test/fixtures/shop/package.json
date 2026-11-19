@@ -1,0 +1,8 @@
+{
+  "name": "pocket-notes",
+  "private": true,
+  "dependencies": {
+    "@lemonsqueezy/lemonsqueezy.js": "^4.0.0",
+    "next": "^15.0.0"
+  }
+}

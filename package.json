@@ -1,0 +1,43 @@
+{
+  "name": "sunset-scan",
+  "version": "0.1.0",
+  "description": "Read-only scanner that lists what breaks in a JavaScript/TypeScript project when Lemon Squeezy shuts down, with the closest Stripe equivalent for each finding.",
+  "keywords": [
+    "lemonsqueezy",
+    "lemon-squeezy",
+    "stripe",
+    "migration",
+    "shutdown",
+    "audit",
+    "cli"
+  ],
+  "license": "MIT",
+  "author": "TORUT LTD <furkan.tasci@torut.dev>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TorutDev/sunset-scan.git"
+  },
+  "bugs": "https://github.com/TorutDev/sunset-scan/issues",
+  "homepage": "https://github.com/TorutDev/sunset-scan#readme",
+  "type": "module",
+  "bin": {
+    "sunset-scan": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}
