@@ -22,7 +22,8 @@ export type FindingKind =
   | 'webhook-signature'
   | 'webhook-event'
   | 'custom-data'
-  | 'env-var';
+  | 'env-var'
+  | 'stored-id';
 
 export interface Finding {
   category: CategoryId;
@@ -34,6 +35,8 @@ export interface Finding {
   match: string;
   /** Closest Stripe equivalent for this specific finding, when more precise than the category's. */
   stripe?: string;
+  /** True when the file looks like a test, fixture or mock. */
+  test?: boolean;
 }
 
 export interface ScanResult {
@@ -49,9 +52,11 @@ const SKIP_FILES = new Set(['package-lock.json', 'npm-shrinkwrap.json']);
 const CODE_EXT = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.mts', '.cts', '.vue', '.svelte', '.astro']);
 const MARKUP_EXT = new Set(['.html', '.htm', '.md', '.mdx']);
 const CONFIG_EXT = new Set(['.json', '.yml', '.yaml', '.toml']);
+const SCHEMA_EXT = new Set(['.prisma', '.sql']);
+const TEST_PATH = /(?:^|\/)(?:__tests__|__mocks__|tests?|e2e|fixtures?|mocks?|cypress|playwright)\/|\.(?:test|spec|e2e)\.[cm]?[jt]sx?$/i;
 const MAX_BYTES = 1_000_000;
 
-type FileType = 'code' | 'markup' | 'config' | 'env' | 'package';
+type FileType = 'code' | 'markup' | 'config' | 'env' | 'package' | 'schema';
 
 function fileType(name: string): FileType | undefined {
   if (name === 'package.json') return 'package';
@@ -61,6 +66,7 @@ function fileType(name: string): FileType | undefined {
   if (CODE_EXT.has(ext)) return 'code';
   if (MARKUP_EXT.has(ext)) return 'markup';
   if (CONFIG_EXT.has(ext)) return 'config';
+  if (SCHEMA_EXT.has(ext)) return 'schema';
   return undefined;
 }
 
@@ -91,10 +97,18 @@ const CHECKOUT_LINK_RE = /([\w-]*)\.?lemonsqueezy\.com\/(checkout\/buy|checkout\
 const PORTAL_LINK_RE = /lemonsqueezy\.com\/billing\b/g;
 const LEMON_JS_RE = /(?:lemonsqueezy|lmsqueezy)\.com\/(?:js\/)?lemon\.js/g;
 const OVERLAY_RE = /lemonsqueezy-button|createLemonSqueezy|LemonSqueezy\.(?:Setup|Refresh|Url\.Open|Url\.Close)|Checkout\.Success|PaymentMethodUpdate\.(?:Mounted|Closed|Updated)/g;
-const AFFILIATE_RE = /LemonSqueezy\.Affiliate\.\w+/g;
+const AFFILIATE_RE = /LemonSqueezy\.Affiliate\.\w+|lmsqueezy\.com\/affiliate\.js/g;
+const STORED_ID_RE = /\b\w*lemon_?squeezy\w*\b/gi;
+const SCHEMA_PATH = /schema|migration|\/models?\/|entit/i;
 const PORTAL_PROP_RE = /\b(?:customer_portal_update_subscription|customer_portal|update_payment_method)\b/g;
-const EVENT_RE = new RegExp('[\'"`](' + Object.keys(WEBHOOK_EVENTS).join('|') + ')[\'"`]', 'g');
-const ENV_TOKEN_RE = /\b[A-Z][A-Z0-9_]{2,}\b/g;
+const EVENT_NAMES = Object.keys(WEBHOOK_EVENTS).join('|');
+const EVENT_RE = new RegExp('[\'"`](' + EVENT_NAMES + ')[\'"`]', 'g');
+// Unquoted object keys in a handler map: `subscription_created: onCreated,`
+const EVENT_KEY_RE = new RegExp('(?<![\\w.$])(' + EVENT_NAMES + ')\\s*:(?!:)', 'g');
+// Upper-case names with at least one underscore, not ending in one (skips template prefixes like `LS_${plan}`).
+const ENV_TOKEN_RE = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b(?![`$])/g;
+// `env` as its own word: process.env, import.meta.env, env.X; not FOO_ENV_KEYS.
+const ENV_LINE = /\benv\b/i;
 const LS_ENV_NAME = /LEMON|LMSQUEEZY|^(?:(?:NEXT_PUBLIC|NUXT_PUBLIC|EXPO_PUBLIC|REACT_APP|VITE|PUBLIC|NUXT)_)?LS_[A-Z0-9_]+$/;
 const ENV_FILE_KEY = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/;
 
@@ -155,12 +169,25 @@ function scanEnvFile(lines: string[], add: Add): void {
 function scanEnvNames(lines: string[], everyLine: boolean, add: Add): void {
   const seen = new Set<string>();
   lines.forEach((text, i) => {
-    if (!everyLine && !/env/i.test(text)) return;
+    if (!everyLine && !ENV_LINE.test(text)) return;
     for (const m of text.matchAll(ENV_TOKEN_RE)) {
       const name = m[0];
       if (!LS_ENV_NAME.test(name) || seen.has(name)) continue;
       seen.add(name);
       add('env', 'env-var', i + 1, name, envHint(name));
+    }
+  });
+}
+
+function scanStoredIds(lines: string[], add: Add): void {
+  const seen = new Set<string>();
+  lines.forEach((text, i) => {
+    if (/^\s*(?:\/\/|--|#)/.test(text)) return;
+    for (const m of text.matchAll(STORED_ID_RE)) {
+      const name = m[0];
+      if (seen.has(name.toLowerCase())) continue;
+      seen.add(name.toLowerCase());
+      add('stored-ids', 'stored-id', i + 1, name);
     }
   });
 }
@@ -174,6 +201,7 @@ function scanLinks(lines: string[], mentionsLs: boolean, add: Add): void {
     }
     for (const _ of text.matchAll(PORTAL_LINK_RE)) add('portal', 'link', n, 'lemonsqueezy.com/billing');
     for (const _ of text.matchAll(LEMON_JS_RE)) add('checkout-links', 'overlay', n, 'lemon.js script');
+    if (/lemonsqueezy\.imgix\.net/.test(text)) add('files', 'link', n, 'lemonsqueezy.imgix.net (image hosted by Lemon Squeezy)');
     for (const m of text.matchAll(AFFILIATE_RE)) add('affiliates', 'overlay', n, m[0]);
     if (!mentionsLs) return;
     for (const m of text.matchAll(OVERLAY_RE)) add('checkout-links', 'overlay', n, m[0]);
@@ -215,7 +243,10 @@ function scanCode(content: string, lines: string[], mentionsLs: boolean, add: Ad
     : undefined;
   const memberRe = /([\w$]+)\s*\??\.\s*([A-Za-z_$][\w$]*)\s*\(/g;
   const hasApiHost = content.includes('api.lemonsqueezy.com');
-  const hasEvents = mentionsLs || /event_name|x-signature/i.test(content);
+  // Provider-agnostic handlers often never name the provider; three or more
+  // distinct Lemon Squeezy event names in one file are enough evidence.
+  const eventNames = new Set([...content.matchAll(EVENT_RE), ...content.matchAll(EVENT_KEY_RE)].map((m) => m[1]));
+  const hasEvents = mentionsLs || /event_name|x-signature/i.test(content) || eventNames.size >= 3;
 
   lines.forEach((text, i) => {
     const n = i + 1;
@@ -251,7 +282,7 @@ function scanCode(content: string, lines: string[], mentionsLs: boolean, add: Ad
 
     if (hasEvents) {
       if (/x-signature/i.test(text)) add('webhooks', 'webhook-signature', n, 'X-Signature check');
-      for (const m of text.matchAll(EVENT_RE)) {
+      for (const m of [...text.matchAll(EVENT_RE), ...text.matchAll(EVENT_KEY_RE)]) {
         const event = m[1] ?? '';
         add(event.startsWith('license') ? 'licenses' : event.startsWith('affiliate') ? 'affiliates' : 'webhooks', 'webhook-event', n, event, WEBHOOK_EVENTS[event]);
       }
@@ -277,12 +308,13 @@ export function scan(root: string): ScanResult {
     const content = readFileSync(full, 'utf8');
     filesScanned++;
     const file = relative(root, full).split('\\').join('/');
+    const isTest = TEST_PATH.test(file);
     const seen = new Set<string>();
     const add: Add = (category, kind, line, match, stripe) => {
       const key = `${category}|${kind}|${line}|${match}`;
       if (seen.has(key)) return;
       seen.add(key);
-      findings.push({ category, kind, file, line, match, ...(stripe ? { stripe } : {}) });
+      findings.push({ category, kind, file, line, match, ...(stripe ? { stripe } : {}), ...(isTest ? { test: true } : {}) });
     };
 
     if (type === 'package') {
@@ -295,11 +327,28 @@ export function scan(root: string): ScanResult {
       continue;
     }
     const mentionsLs = MENTIONS_LS.test(content);
+    if (type === 'schema' || (type === 'code' && mentionsLs && SCHEMA_PATH.test(file) && !isTest)) scanStoredIds(lines, add);
+    if (type === 'schema') continue;
     scanLinks(lines, mentionsLs, add);
     if (type === 'code') scanCode(content, lines, mentionsLs, add);
     if (type === 'code') scanEnvNames(lines, /env/i.test(basename(full)), add);
     if (type === 'config') scanEnvNames(lines, true, add);
   }
+
+  // A stored ID column usually shows up in a schema and in every old migration.
+  // Report each name once, preferring the schema over migration history.
+  const storedFirst = new Map<string, Finding>();
+  const isMigration = (f: Finding) => /(?:^|\/)migrations?\//i.test(f.file);
+  for (const f of findings) {
+    if (f.kind !== 'stored-id') continue;
+    const key = f.match.toLowerCase();
+    const current = storedFirst.get(key);
+    if (!current || (isMigration(current) && !isMigration(f))) storedFirst.set(key, f);
+  }
+  const keep = new Set(storedFirst.values());
+  const deduped = findings.filter((f) => f.kind !== 'stored-id' || keep.has(f));
+  findings.length = 0;
+  findings.push(...deduped);
 
   findings.sort(
     (a, b) =>

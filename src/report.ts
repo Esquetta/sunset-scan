@@ -18,6 +18,7 @@ export function toJson(result: ScanResult, version: string): string {
       summary: {
         filesScanned: result.filesScanned,
         findings: result.findings.length,
+        findingsInTests: result.findings.filter((f) => f.test).length,
         filesWithFindings: new Set(result.findings.map((f) => f.file)).size,
       },
       categories: CATEGORIES.filter((c) => used.has(c.id)).map((c) => ({
@@ -60,10 +61,15 @@ export function toText(result: ScanResult, version: string, color: boolean): str
   const dim = (s: string) => (color ? `\x1b[2m${s}\x1b[0m` : s);
   const yellow = (s: string) => (color ? `\x1b[33m${s}\x1b[0m` : s);
   const out: string[] = [];
-  const files = new Set(result.findings.map((f) => f.file)).size;
+  const app = result.findings.filter((f) => !f.test);
+  const tests = result.findings.length - app.length;
+  const files = new Set(app.map((f) => f.file)).size;
 
   out.push(bold(`sunset-scan ${version}`) + '  Lemon Squeezy shutdown audit');
-  out.push(`Scanned ${result.filesScanned} files: ${result.findings.length} findings in ${files} files.`);
+  out.push(
+    `Scanned ${result.filesScanned} files: ${app.length} findings in ${files} files` +
+      (tests ? `, plus ${tests} in test files (listed with --json).` : '.'),
+  );
   out.push('');
   if (result.findings.length === 0) {
     out.push('No Lemon Squeezy integration points found in this folder.');
@@ -79,11 +85,13 @@ export function toText(result: ScanResult, version: string, color: boolean): str
   out.push(dim(DOCS.shutdownPost));
   out.push('');
 
-  const width = Math.min(60, Math.max(...result.findings.map((f) => `${f.file}:${f.line}`.length)));
+  const width = Math.min(60, Math.max(0, ...app.map((f) => `${f.file}:${f.line}`.length)));
   for (const category of CATEGORIES) {
-    const findings = result.findings.filter((f) => f.category === category.id);
-    if (findings.length === 0) continue;
-    out.push(bold(`${category.title.toUpperCase()} (${findings.length})`));
+    const all = result.findings.filter((f) => f.category === category.id);
+    if (all.length === 0) continue;
+    const findings = all.filter((f) => !f.test);
+    const inTests = all.length - findings.length;
+    out.push(bold(`${category.title.toUpperCase()} (${findings.length}${inTests ? `, +${inTests} in tests` : ''})`));
     for (const f of findings) out.push(findingLine(f, width));
     out.push(wrap(`Stripe: ${category.stripe}`, '  '));
     out.push(wrap(`${yellow(`Migration tool: ${COVERAGE_LABEL[category.coverage]}.`)} ${category.coverageNote}`, '  '));

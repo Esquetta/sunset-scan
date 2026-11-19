@@ -16,7 +16,7 @@ describe('fixture project', () => {
   const { findings, filesScanned } = scan(FIXTURE);
 
   it('scans source, markup, config and env files', () => {
-    expect(filesScanned).toBe(9);
+    expect(filesScanned).toBe(13);
   });
 
   it('finds the dependency and both import styles', () => {
@@ -67,7 +67,9 @@ describe('fixture project', () => {
   it('finds checkout links, lemon.js, overlays and portal links', () => {
     expect(pick(findings, 'public/index.html')).toEqual([
       '4 checkout-links lemon.js script',
-      '7 portal lemonsqueezy.com/billing',
+      '8 portal lemonsqueezy.com/billing',
+      '9 files lemonsqueezy.imgix.net (image hosted by Lemon Squeezy)',
+      '5 affiliates lmsqueezy.com/affiliate.js',
     ]);
     expect(pick(findings, 'src/components/BuyButton.tsx')).toContain('15 checkout-links lemonsqueezy.com/checkout/buy');
     expect(pick(findings, 'src/components/BuyButton.tsx')).toContain('22 checkout-links LemonSqueezy.Url.Open');
@@ -84,6 +86,27 @@ describe('fixture project', () => {
     const json = toJson(scan(FIXTURE), 'test');
     expect(json).not.toContain('fixture-value-not-a-real-key');
     expect(json).not.toContain('DATABASE_URL');
+  });
+
+  it('finds handler maps that never name the provider', () => {
+    expect(pick(findings, 'src/server/subscription-events.ts')).toEqual([
+      '5 webhooks subscription_resumed',
+      '6 webhooks subscription_paused',
+      '7 webhooks subscription_unpaused',
+    ]);
+  });
+
+  it('reports stored IDs once, from the schema rather than migration history', () => {
+    expect(findings.filter((f) => f.kind === 'stored-id').map((f) => `${f.file}:${f.line} ${f.match}`)).toEqual([
+      'prisma/schema.prisma:4 lemonSqueezyCustomerId',
+      'prisma/schema.prisma:5 lemonSqueezySubscriptionId',
+    ]);
+  });
+
+  it('flags findings in test files and keeps them out of the main text list', () => {
+    const inTests = findings.filter((f) => f.test);
+    expect(inTests.map((f) => `${f.file} ${f.match}`)).toEqual(['src/__tests__/webhook.test.ts subscription_created']);
+    expect(toText(scan(FIXTURE), 'test', false)).not.toContain('src/__tests__/webhook.test.ts');
   });
 
   it('stays quiet on code that does not use Lemon Squeezy', () => {
@@ -159,7 +182,7 @@ describe('rules and report', () => {
   it('prints a text report without colour codes when colour is off', () => {
     const text = toText(scan(FIXTURE), 'test', false);
     expect(text).not.toContain('\x1b[');
-    expect(text).toContain('WEBHOOK HANDLERS (8)');
+    expect(text).toContain('WEBHOOK HANDLERS (11, +1 in tests)');
     expect(text).toContain('Migration tool: NOT COVERED.');
   });
 

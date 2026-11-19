@@ -58,6 +58,7 @@ export type CategoryId =
   | 'webhooks'
   | 'catalog'
   | 'customers'
+  | 'stored-ids'
   | 'orders'
   | 'discounts'
   | 'files'
@@ -165,6 +166,16 @@ export const CATEGORIES: Category[] = [
     coverageNote:
       'Customers are migrated "with a report mapping Lemon Squeezy customer IDs to Stripe customer IDs". Stored customer IDs and the API calls must be updated.',
     docs: [DOCS.lsMigration, DOCS.customers],
+  },
+  {
+    id: 'stored-ids',
+    title: 'Stored Lemon Squeezy IDs (database and models)',
+    stripe:
+      'Stripe Customer, Subscription and Price IDs. Add new columns and backfill them before the cut-over; keep the old IDs until the move is checked.',
+    coverage: 'data-only',
+    coverageNote:
+      'Customers are migrated "with a report mapping Lemon Squeezy customer IDs to Stripe customer IDs"; that report is what you backfill from. Your database is not changed by the tool.',
+    docs: [DOCS.lsMigration, DOCS.customers, DOCS.subscriptions],
   },
   {
     id: 'orders',
@@ -375,10 +386,10 @@ export const API_RESOURCES = [
 
 /** What a Lemon Squeezy environment variable most likely becomes, from its name. */
 export function envHint(name: string): string {
-  if (/WEBHOOK|SIGNING/.test(name)) return 'Stripe webhook signing secret (whsec_...)';
-  if (/VARIANT|PRODUCT|PLAN|PRICE/.test(name)) return 'Stripe Price or Product ID';
+  if (/WEBHOOK|SIGNING|SIGNATURE/.test(name)) return 'Stripe webhook signing secret (whsec_...)';
   if (/STORE/.test(name)) return 'store identifier: check whether anything still needs it';
   if (/KEY|SECRET|TOKEN/.test(name)) return 'Stripe secret or restricted API key (sk_... / rk_...)';
+  if (/VARIANT|PRODUCT|PLAN|PRICE|_IDS?(?:_|$)/.test(name)) return 'Stripe Price or Product ID';
   return 'review';
 }
 
