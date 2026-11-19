@@ -101,7 +101,7 @@ export function toText(result: ScanResult, version: string, color: boolean): str
 
   out.push(bold('NOT VISIBLE IN CODE: CHECK BY HAND'));
   for (const item of NOT_VISIBLE_IN_CODE) {
-    out.push(wrap(`- ${item.text}`, '  '));
+    out.push(`  - ${wrap(item.text, '    ').trimStart()}`);
     out.push(dim(`    ${item.doc}`));
   }
   out.push('');

@@ -190,7 +190,20 @@ describe('rules and report', () => {
     const readme = readFileSync(join(FIXTURE, '..', '..', '..', 'README.md'), 'utf8');
     const block = /<!-- example:start -->\n```text\n([\s\S]*?)```\n<!-- example:end -->/.exec(readme)?.[1];
     expect(block).toBeDefined();
-    const text = toText(scan(FIXTURE), '0.0.0', false).replace(/^sunset-scan 0\.0\.0/, 'sunset-scan x.y.z');
-    expect(text).toContain(block!.trimEnd().split('\n').slice(0, 40).join('\n'));
+    const text = toText(scan(FIXTURE), '0.0.0', false);
+    // The README shows excerpts separated by "[...]" lines; each excerpt must be real output.
+    const chunks = block!.trimEnd().split(/\n\[\.\.\.\]\n/);
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const chunk of chunks) expect(text).toContain(chunk);
+  });
+});
+
+describe('safety', () => {
+  it('has no network or write access in shipped code', () => {
+    const srcDir = dirname(fileURLToPath(import.meta.url));
+    for (const name of readdirSync(srcDir).filter((n) => n.endsWith('.ts') && !n.endsWith('.test.ts'))) {
+      const source = readFileSync(join(srcDir, name), 'utf8');
+      expect(source, name).not.toMatch(/node:(?:https?|net|tls|dgram|child_process)|\bfetch\s*\(|writeFile|appendFile|unlink|rmSync|mkdir/);
+    }
   });
 });

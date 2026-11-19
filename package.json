@@ -24,7 +24,8 @@
     "sunset-scan": "dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/**/*.test.js"
   ],
   "engines": {
     "node": ">=18"
