@@ -204,7 +204,11 @@ function scanLinks(lines: string[], mentionsLs: boolean, add: Add): void {
     if (/lemonsqueezy\.imgix\.net/.test(text)) add('files', 'link', n, 'lemonsqueezy.imgix.net (image hosted by Lemon Squeezy)');
     for (const m of text.matchAll(AFFILIATE_RE)) add('affiliates', 'overlay', n, m[0]);
     if (!mentionsLs) return;
-    for (const m of text.matchAll(OVERLAY_RE)) add('checkout-links', 'overlay', n, m[0]);
+    for (const m of text.matchAll(OVERLAY_RE)) {
+      // `createLemonSqueezy?: () => void` in a `declare global` block is a type, not a call.
+      if (/^\??\s*:/.test(text.slice(m.index + m[0].length))) continue;
+      add('checkout-links', 'overlay', n, m[0]);
+    }
   });
 }
 

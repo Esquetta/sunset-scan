@@ -6,10 +6,13 @@ Lemon Squeezy [stops processing payments on March 31, 2027](https://www.lemonsqu
 
 `sunset-scan` reads a JavaScript or TypeScript project and lists those places with file and line, the closest Stripe equivalent for each, and whether Lemon Squeezy's migration tool covers it.
 
+![sunset-scan report for the fixture project: webhook handlers with their closest Stripe events](https://raw.githubusercontent.com/TorutDev/sunset-scan/main/assets/report.png)
+
 ```sh
 npx sunset-scan            # scan the current folder
 npx sunset-scan ./my-app   # scan another folder
 npx sunset-scan --json     # machine-readable report
+npx sunset-scan --markdown > lemon-squeezy-exit.md   # checklist to track the move
 ```
 
 It only reads files. It never changes the scanned project, makes no network calls, and reports environment variable names, never their values.
@@ -41,7 +44,7 @@ Output for the fixture project in [`test/fixtures/shop`](test/fixtures/shop) (ex
 
 <!-- example:start -->
 ```text
-Scanned 13 files: 45 findings in 10 files, plus 1 in test files (listed with --json).
+Scanned 13 files: 44 findings in 10 files, plus 1 in test files (listed with --json).
 
 Lemon Squeezy stops processing payments on March 31, 2027. Its migration tool moves products,
 customers and eligible subscriptions to Stripe Managed Payments. It does not change your code.
@@ -63,16 +66,23 @@ CHECKOUT CREATION (1)
 [...]
 WEBHOOK HANDLERS (11, +1 in tests)
     src/app/api/webhook/route.ts:7       X-Signature check
-    src/app/api/webhook/route.ts:13      custom_data  ->  metadata or client_reference_id on the Checkout Session
+    src/app/api/webhook/route.ts:13      custom_data
+        -> metadata or client_reference_id on the Checkout Session
     src/app/api/webhook/route.ts:15      order_created  ->  checkout.session.completed
     src/app/api/webhook/route.ts:18      subscription_created  ->  customer.subscription.created
     src/app/api/webhook/route.ts:19      subscription_updated  ->  customer.subscription.updated
-    src/app/api/webhook/route.ts:22      subscription_cancelled  ->  customer.subscription.updated with cancel_at_period_end=true (the subscription is still active until the period ends)
+    src/app/api/webhook/route.ts:22      subscription_cancelled
+        -> customer.subscription.updated with cancel_at_period_end=true (the subscription is
+           still active until the period ends)
     src/app/api/webhook/route.ts:23      subscription_expired  ->  customer.subscription.deleted
     src/app/api/webhook/route.ts:26      subscription_payment_failed  ->  invoice.payment_failed
-    src/server/subscription-events.ts:5  subscription_resumed  ->  customer.subscription.updated with cancel_at_period_end back to false
-    src/server/subscription-events.ts:6  subscription_paused  ->  customer.subscription.updated with pause_collection set (customer.subscription.paused only fires for status=paused)
-    src/server/subscription-events.ts:7  subscription_unpaused  ->  customer.subscription.updated with pause_collection unset
+    src/server/subscription-events.ts:5  subscription_resumed
+        -> customer.subscription.updated with cancel_at_period_end back to false
+    src/server/subscription-events.ts:6  subscription_paused
+        -> customer.subscription.updated with pause_collection set (customer.subscription.paused
+           only fires for status=paused)
+    src/server/subscription-events.ts:7  subscription_unpaused
+        -> customer.subscription.updated with pause_collection unset
   Stripe: A new Stripe webhook endpoint. Verify the Stripe-Signature header with the endpoint's
   whsec_ signing secret and the raw request body, then handle Stripe event types (closest match
   shown per event). Events can arrive out of order and more than once.
@@ -98,6 +108,25 @@ NOT VISIBLE IN CODE: CHECK BY HAND
     https://docs.stripe.com/payments/managed-payments/eligibility
 ```
 <!-- example:end -->
+
+## Track the move with a checklist
+
+`--markdown` prints the same report as a checklist. Save it next to your migration branch or paste it into an issue, and tick items off as you replace them. Test-file findings are folded into a `<details>` block under each section.
+
+<!-- markdown-example:start -->
+```markdown
+# Lemon Squeezy exit checklist
+
+Lemon Squeezy stops processing payments on March 31, 2027 ([source](https://www.lemonsqueezy.com/blog/saying-goodbye-to-lemon-squeezy)). Its migration tool moves products, customers and eligible subscriptions to Stripe Managed Payments; it does not change your code. Tick each item once it is replaced.
+[...]
+## Webhook handlers (11, +1 in tests)
+[...]
+- [ ] `src/app/api/webhook/route.ts:7` `X-Signature check`
+- [ ] `src/app/api/webhook/route.ts:13` `custom_data` → metadata or client_reference_id on the Checkout Session
+- [ ] `src/app/api/webhook/route.ts:15` `order_created` → checkout.session.completed
+- [ ] `src/app/api/webhook/route.ts:18` `subscription_created` → customer.subscription.created
+```
+<!-- markdown-example:end -->
 
 ## What it does not do
 

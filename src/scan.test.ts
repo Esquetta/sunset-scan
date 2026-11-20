@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { toJson, toText } from './report.js';
+import { toJson, toMarkdown, toText } from './report.js';
 import { CATEGORIES, WEBHOOK_EVENTS } from './rules.js';
 import { scan, type Finding } from './scan.js';
 
@@ -109,6 +109,11 @@ describe('fixture project', () => {
     expect(toText(scan(FIXTURE), 'test', false)).not.toContain('src/__tests__/webhook.test.ts');
   });
 
+  it('does not report Lemon.js names declared as types', () => {
+    expect(pick(findings, 'src/components/BuyButton.tsx').some((s) => s.startsWith('5 '))).toBe(false);
+    expect(pick(findings, 'src/components/BuyButton.tsx')).toContain('12 checkout-links createLemonSqueezy');
+  });
+
   it('stays quiet on code that does not use Lemon Squeezy', () => {
     expect(pick(findings, 'src/unrelated.ts')).toEqual([]);
   });
@@ -184,6 +189,28 @@ describe('rules and report', () => {
     expect(text).not.toContain('\x1b[');
     expect(text).toContain('WEBHOOK HANDLERS (11, +1 in tests)');
     expect(text).toContain('Migration tool: NOT COVERED.');
+  });
+
+  it('prints a Markdown checklist with test findings folded away', () => {
+    const md = toMarkdown(scan(FIXTURE), 'test');
+    expect(md.startsWith('# Lemon Squeezy exit checklist\n')).toBe(true);
+    expect(md).toContain('- [ ] `src/lib/billing.ts:13` `createCheckout()`');
+    expect(md).toContain('- [ ] `src/app/api/webhook/route.ts:15` `order_created` → checkout.session.completed');
+    expect(md).toContain('## Webhook handlers (11, +1 in tests)');
+    expect(md).toContain('<details><summary>1 in test files</summary>');
+    expect(md).toContain('## Not visible in code: check by hand');
+    expect(md).not.toMatch(/\u001b\[/);
+    expect(md).not.toContain('fixture-value-not-a-real-key');
+  });
+
+  it('keeps the README Markdown example in step with real output', () => {
+    const readme = readFileSync(join(FIXTURE, '..', '..', '..', 'README.md'), 'utf8');
+    const block = /<!-- markdown-example:start -->\n```markdown\n([\s\S]*?)```\n<!-- markdown-example:end -->/.exec(readme)?.[1];
+    expect(block).toBeDefined();
+    const md = toMarkdown(scan(FIXTURE), '0.0.0');
+    const chunks = block!.trimEnd().split(/\n\[\.\.\.\]\n/);
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const chunk of chunks) expect(md).toContain(chunk);
   });
 
   it('keeps the README example in step with real output', () => {
