@@ -1,6 +1,6 @@
 {
   "name": "sunset-scan",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Read-only scanner that lists what breaks in a JavaScript/TypeScript project when Lemon Squeezy shuts down, with the closest Stripe equivalent for each finding.",
   "keywords": [
     "lemonsqueezy",

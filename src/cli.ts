@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import { readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { toJson, toText } from './report.js';
+import { toJson, toMarkdown, toText } from './report.js';
 import { scan } from './scan.js';
 
-const HELP = `Usage: sunset-scan [path] [--json]
+const HELP = `Usage: sunset-scan [path] [--json | --markdown]
 
 Lists what breaks in a JavaScript/TypeScript project when Lemon Squeezy
 shuts down, with the closest Stripe equivalent for each finding.
@@ -12,6 +12,8 @@ Read-only: nothing in the scanned folder is changed and no network calls are mad
 
   path        Folder to scan (default: current folder)
   --json      Print the report as JSON
+  --markdown  Print the report as a Markdown checklist (redirect it to a file
+              to keep it, for example > lemon-squeezy-exit.md)
   --version   Print the version
   --help      Print this help
 `;
@@ -21,9 +23,18 @@ function main(argv: string[]): number {
     .version;
   const flags = argv.filter((a) => a.startsWith('-'));
   const paths = argv.filter((a) => !a.startsWith('-'));
-  const unknown = flags.find((f) => !['--json', '--help', '-h', '--version', '-v'].includes(f));
-  if (unknown || paths.length > 1) {
-    process.stderr.write(`${unknown ? `Unknown option: ${unknown}` : 'Pass one folder at most.'}\n\n${HELP}`);
+  const unknown = flags.find((f) => !['--json', '--markdown', '--md', '--help', '-h', '--version', '-v'].includes(f));
+  const json = flags.includes('--json');
+  const markdown = flags.includes('--markdown') || flags.includes('--md');
+  const problem = unknown
+    ? `Unknown option: ${unknown}`
+    : paths.length > 1
+      ? 'Pass one folder at most.'
+      : json && markdown
+        ? 'Choose --json or --markdown, not both.'
+        : undefined;
+  if (problem) {
+    process.stderr.write(`${problem}\n\n${HELP}`);
     return 2;
   }
   if (flags.includes('--help') || flags.includes('-h')) {
@@ -41,8 +52,10 @@ function main(argv: string[]): number {
     return 2;
   }
   const result = scan(root);
-  if (flags.includes('--json')) {
+  if (json) {
     process.stdout.write(toJson(result, version) + '\n');
+  } else if (markdown) {
+    process.stdout.write(toMarkdown(result, version));
   } else {
     process.stdout.write(toText(result, version, process.stdout.isTTY === true && !process.env.NO_COLOR));
   }
