@@ -6,7 +6,7 @@ Lemon Squeezy [stops processing payments on March 31, 2027](https://www.lemonsqu
 
 `sunset-scan` reads a JavaScript or TypeScript project and lists those places with file and line, the closest Stripe equivalent for each, and whether Lemon Squeezy's migration tool covers it.
 
-![sunset-scan report for the fixture project: webhook handlers with their closest Stripe events](https://raw.githubusercontent.com/TorutDev/sunset-scan/main/assets/report.png)
+![sunset-scan report for the fixture project: webhook handlers with their closest Stripe events](https://raw.githubusercontent.com/Esquetta/sunset-scan/main/assets/report.png)
 
 ```sh
 npx sunset-scan            # scan the current folder

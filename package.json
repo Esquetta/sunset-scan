@@ -15,10 +15,10 @@
   "author": "TORUT LTD <furkan.tasci@torut.dev>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/TorutDev/sunset-scan.git"
+    "url": "git+https://github.com/Esquetta/sunset-scan.git"
   },
-  "bugs": "https://github.com/TorutDev/sunset-scan/issues",
-  "homepage": "https://github.com/TorutDev/sunset-scan#readme",
+  "bugs": "https://github.com/Esquetta/sunset-scan/issues",
+  "homepage": "https://github.com/Esquetta/sunset-scan#readme",
   "type": "module",
   "bin": {
     "sunset-scan": "dist/cli.js"
